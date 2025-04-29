@@ -1,9 +1,11 @@
 import os
 import sys
+import constants as cons
 from PySide6 import QtWidgets, QtCore
 from PySide6.QtGui import QIcon
 from os.path import isdir, join
 from fileDialog import UploadFile
+from project_dialog import ProjectDialog
 
 class App(QtWidgets.QWidget):
     def __init__(self):
@@ -11,9 +13,7 @@ class App(QtWidgets.QWidget):
         self.setWindowTitle("English Exam Corrector")
         self.setFixedSize(700, 500)
 
-        self.PATH = "projects"
-        self.projects = ["New project"] + [f for f in os.listdir(self.PATH) if isdir(join(self.PATH, f))]
-
+        os.makedirs(cons.DIR_PATH, exist_ok=True)
         self.main_layout = QtWidgets.QVBoxLayout(self)
 
         self.scroll_area = QtWidgets.QScrollArea()
@@ -26,24 +26,43 @@ class App(QtWidgets.QWidget):
         self.scroll_area.setWidget(self.content_widget)
         self.main_layout.addWidget(self.scroll_area)
 
-        self.load_projects()
+        self.setup_dirs()
 
-    def load_projects(self):
+
+    def list_projects(self) -> list[str]:
+        return sorted(
+            f for f in os.listdir(cons.DIR_PATH)
+            if isdir(join(cons.DIR_PATH, f))
+        )
+
+    def setup_dirs(self):
         for i in reversed(range(self.grid_layout.count())):
             widget = self.grid_layout.itemAt(i).widget()
             if widget:
                 widget.setParent(None)
-
-        for index, project_name in enumerate(self.projects):
+        
+        self.load_projects()
+        
+    def load_projects(self):
+        self.create_project_UI("New project", is_project=False)
+        for index, project_name in enumerate(self.list_projects()):
+            self.create_project_UI(project_name, index + 1)
+            
+    def create_project_UI(self, project_name, index=None, is_project=True):
             container = QtWidgets.QWidget()
             vbox = QtWidgets.QVBoxLayout(container)
             vbox.setAlignment(QtCore.Qt.AlignCenter)
 
-            btn = QtWidgets.QPushButton()
+            btn = QtWidgets.QPushButton()      
             btn.setFixedSize(120, 120) 
-            btn.setIcon(QIcon("resources/icons/folder.svg"))
+            btn.setIcon(QIcon(cons.FOLDER_ICON if is_project else cons.ADD_ICON))
+
             btn.setIconSize(QtCore.QSize(100, 100))
-            btn.clicked.connect(lambda _, name=project_name: self.open_project(name))
+            if is_project:
+                btn.clicked.connect(lambda _, name=project_name: self.open_project(name))
+                
+            else:    
+                btn.clicked.connect(lambda: self.create_new_project())
 
             label = QtWidgets.QLabel(project_name)
             label.setAlignment(QtCore.Qt.AlignCenter)
@@ -52,25 +71,24 @@ class App(QtWidgets.QWidget):
             vbox.addWidget(btn)
             vbox.addWidget(label)
             container.setLayout(vbox)
-
-            row, col = divmod(index, 4)
+            
+            if(index is None):
+                row, col = divmod(0, 4)
+            else:
+                row, col = divmod(index, 4)
             self.grid_layout.addWidget(container, row, col)
-
+            
     def open_project(self, project_name):
-        if project_name == "New project":
-            self.create_new_project()
-        else:
-            QtWidgets.QMessageBox.information(self, "Project Open", f"Opening {project_name}")
-
+        project_path = join(cons.DIR_PATH, project_name)
+        dialog = ProjectDialog(project_name, project_path, self)
+        dialog.exec()
+        
     def create_new_project(self):
-        self.dialog_window = UploadFile()
-        self.dialog_window.show()
-        # new_name, ok = QtWidgets.QInputDialog.getText(self, "New Project", "Enter project name:")
-        # if ok and new_name:
-        #     os.makedirs(join(self.PATH, new_name), exist_ok=False)
-        #     self.projects.append(new_name)
-        #     self.load_projects()
-    
+        dialog = UploadFile(self)
+        dialog.setModal(True) # block parent window
+        if dialog.exec():
+            self.load_projects()
+
 if __name__ == "__main__":
     app = QtWidgets.QApplication(sys.argv)
     widget = App()

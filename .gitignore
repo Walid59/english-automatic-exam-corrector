@@ -1,0 +1,5 @@
+projects
+test.py
+__pycache__/
+correct_copy.py
+.idea/
