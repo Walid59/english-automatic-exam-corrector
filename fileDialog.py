@@ -4,8 +4,12 @@ from PySide6 import QtWidgets as w
 from PySide6 import QtCore
 from shutil import copy
 
+
 class UploadFile(w.QDialog):
     def __init__(self, parent=None, project_dir=None):
+        """
+        initializes file dialog
+        """
         self.app_instance = parent
         self.selected_files = None
         self.project_name = ""
@@ -14,6 +18,9 @@ class UploadFile(w.QDialog):
         self.initUI()
 
     def initUI(self):
+        """
+        initializes interface of file dialog
+        """
         self.setWindowTitle("Create project")
         self.setFixedSize(700, 500)
 
@@ -28,6 +35,9 @@ class UploadFile(w.QDialog):
         self.outer_stack.setCurrentIndex(0)
 
     def page_0_handler(self):
+        """
+        set up content of first page
+        """
         self.page_0 = w.QWidget()
         layout = w.QVBoxLayout(self.page_0)
 
@@ -63,7 +73,6 @@ class UploadFile(w.QDialog):
         self.custom_type_combo.addItems(["TOEIC Writing", "TOEIC Listening", "TOEIC Full Custom"])
         self.custom_type_combo.setVisible(False)
 
-
         # Quand on clique sur "Custom correction", on affiche la ComboBox
         self.radio_manual_custom.toggled.connect(self.toggle_custom_type_combo)
 
@@ -88,14 +97,25 @@ class UploadFile(w.QDialog):
         self.outer_stack.addWidget(self.page_0)
 
     def toggle_custom_type_combo(self):
+        """
+        toggle visibility of the custom type combobox
+        :return:
+        """
         show = self.radio_manual_custom.isChecked()
         self.custom_type_combo.setVisible(show)
 
     def toggle_manual_options(self):
+        """
+        toggle visibility of manual correction options depending radio button
+        :return:
+        """
         visible = self.radio_manual.isChecked()
         self.manual_options_container.setVisible(visible)
 
     def page_1_handler(self):
+        """
+        set up content of second page
+        """
         self.page_1 = w.QWidget()
         layout = w.QVBoxLayout(self.page_1)
 
@@ -191,6 +211,11 @@ class UploadFile(w.QDialog):
         self.outer_stack.addWidget(self.page_1)
 
     def goto_page_1(self):
+        """
+        transition from p0 to p1 after project name and user choices
+        determines widget to display
+        :return:
+        """
         self.project_name = self.name_input.text().strip()
         self.preload_saved_answers()
 
@@ -220,6 +245,10 @@ class UploadFile(w.QDialog):
         self.outer_stack.setCurrentIndex(1)
 
     def create_project(self):
+        """
+        Create new project directory according to user choices and save data
+        :return:
+        """
         if self.radio_manual.isChecked() and self.radio_manual_toeic.isChecked():
             corrections = []
             for i, group in enumerate(self.toeic_buttons, 1):
@@ -260,14 +289,18 @@ class UploadFile(w.QDialog):
             except Exception as e:
                 print(f"[WARN] Impossible de supprimer le fichier temporaire : {e}")
 
-
             self.accept()
         except FileExistsError:
             w.QMessageBox.warning(self, "Error", "A project with this name already exists.")
         except OSError as e:
             w.QMessageBox.critical(self, "System Error", f"Failed to create the project:\n{e}")
 
+
     def open_file_dialog(self):
+        """
+        Open file dialog for selecting a file to upload
+        :return:
+        """
         file_dialog = w.QFileDialog(self)
         file_dialog.setWindowTitle("Open File")
         file_dialog.setNameFilter("PDF or Images (*.png *.jpg *.jpeg *.pdf)")
@@ -281,6 +314,10 @@ class UploadFile(w.QDialog):
             print(text)
 
     def save_for_later(self):
+        """
+        Used to save temporarily the correction answers for later completion
+        :return:
+        """
         if not self.project_name:
             w.QMessageBox.warning(self, "Missing Name", "Please enter a project name before saving.")
             return
@@ -302,6 +339,10 @@ class UploadFile(w.QDialog):
         self.reject()  # ← ferme le dialog sans créer le projet
 
     def preload_saved_answers(self):
+        """
+        Load saved correction answer if available
+        :return:
+        """
         temp_path = join(self.project_dir, "__temp__", "toeic_correction.csv")
         if os.path.exists(temp_path):
             try:

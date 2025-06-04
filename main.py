@@ -7,6 +7,7 @@ from os.path import isdir, join
 from fileDialog import UploadFile
 from project_dialog import ProjectDialog
 
+
 class App(QtWidgets.QWidget):
     def __init__(self):
         super().__init__()
@@ -34,9 +35,10 @@ class App(QtWidgets.QWidget):
         os.makedirs(self.project_dir, exist_ok=True)
         self.setup_dirs()
 
-
-
     def load_project_dir(self):
+        """
+        Loads existings projects from config path
+        """
         config_path = "config.txt"
         if os.path.exists(config_path):
             with open(config_path, "r") as f:
@@ -45,6 +47,9 @@ class App(QtWidgets.QWidget):
             return os.path.abspath("projects")
 
     def save_project_dir(self, new_path):
+        """
+        changes config path location to config.txt
+        """
         full_path = os.path.join(new_path, "projects")
         os.makedirs(full_path, exist_ok=True)
         with open("config.txt", "w") as f:
@@ -53,70 +58,90 @@ class App(QtWidgets.QWidget):
         self.setup_dirs()
 
     def change_project_dir(self):
+        """
+        todo
+        """
         new_dir = QtWidgets.QFileDialog.getExistingDirectory(self, "Choisir un nouveau dossier de projets")
         if new_dir:
             self.save_project_dir(new_dir)
 
-
     def list_projects(self) -> list[str]:
+        """
+        return existings projects as list and sorted
+        """
         return sorted(
             f for f in os.listdir(self.project_dir)
             if isdir(join(self.project_dir, f))
         )
 
     def setup_dirs(self):
+        """
+        return existings projects as list and sorted
+        """
         for i in reversed(range(self.grid_layout.count())):
             widget = self.grid_layout.itemAt(i).widget()
             if widget:
                 widget.setParent(None)
-        
+
         self.load_projects()
-        
+
     def load_projects(self):
+        """
+        load_projects displays projects on startup
+        """
         self.create_project_UI("New project", is_project=False)
         for index, project_name in enumerate(self.list_projects()):
             if project_name == "__temp__":
                 continue
             self.create_project_UI(project_name, index + 1)
-            
+
     def create_project_UI(self, project_name, index=None, is_project=True):
-            container = QtWidgets.QWidget()
-            vbox = QtWidgets.QVBoxLayout(container)
-            vbox.setAlignment(QtCore.Qt.AlignCenter)
+        """
+        create_project_UI creates project UI from existings projects in config.txt
+        """
+        container = QtWidgets.QWidget()
+        vbox = QtWidgets.QVBoxLayout(container)
+        vbox.setAlignment(QtCore.Qt.AlignCenter)
 
-            btn = QtWidgets.QPushButton()      
-            btn.setFixedSize(120, 120) 
-            btn.setIcon(QIcon(cons.FOLDER_ICON if is_project else cons.ADD_ICON))
+        btn = QtWidgets.QPushButton()
+        btn.setFixedSize(120, 120)
+        btn.setIcon(QIcon(cons.FOLDER_ICON if is_project else cons.ADD_ICON))
 
-            btn.setIconSize(QtCore.QSize(100, 100))
-            if is_project:
-                btn.clicked.connect(lambda _, name=project_name: self.open_project(name))
-                
-            else:    
-                btn.clicked.connect(lambda: self.create_new_project())
+        btn.setIconSize(QtCore.QSize(100, 100))
+        if is_project:
+            btn.clicked.connect(lambda _, name=project_name: self.open_project(name))
 
-            label = QtWidgets.QLabel(project_name)
-            label.setAlignment(QtCore.Qt.AlignCenter)
-            label.setFixedSize(120, 20)
+        else:
+            btn.clicked.connect(lambda: self.create_new_project())
 
-            vbox.addWidget(btn)
-            vbox.addWidget(label)
-            container.setLayout(vbox)
-            
-            if(index is None):
-                row, col = divmod(0, 4)
-            else:
-                row, col = divmod(index, 4)
-            self.grid_layout.addWidget(container, row, col)
-            
+        label = QtWidgets.QLabel(project_name)
+        label.setAlignment(QtCore.Qt.AlignCenter)
+        label.setFixedSize(120, 20)
+
+        vbox.addWidget(btn)
+        vbox.addWidget(label)
+        container.setLayout(vbox)
+
+        if (index is None):
+            row, col = divmod(0, 4)
+        else:
+            row, col = divmod(index, 4)
+        self.grid_layout.addWidget(container, row, col)
+
     def open_project(self, project_name):
+        """
+        opens dialog for the selected project
+        """
         project_path = join(self.project_dir, project_name)
         dialog = ProjectDialog(project_name, project_path, self)
         dialog.exec()
-        
+
     def create_new_project(self):
+        """
+        opens project creation dialog
+        """
         dialog = UploadFile(self, project_dir=self.project_dir)
-        dialog.setModal(True) # block parent window
+        dialog.setModal(True)  # block parent window
         if dialog.exec():
             self.setup_dirs()
 

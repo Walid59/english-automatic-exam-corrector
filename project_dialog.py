@@ -61,6 +61,12 @@ ACCENT_COMBINATIONS = {
 
 class ProjectDialog(w.QDialog):
     def __init__(self, project_name, project_path, parent=None):
+        """
+        Itinializes project dialog.
+        :param project_name: name of the project
+        :param project_path: path of the project
+        :param parent: parent
+        """
         super().__init__(parent)
         self.template = cv2.imread("resources/templates/Answer_sheet.jpg")
 
@@ -74,6 +80,10 @@ class ProjectDialog(w.QDialog):
         self.initUI()
 
     def initUI(self):
+        """
+        set up graphical interface
+        :return:
+        """
         layout = w.QVBoxLayout(self)
 
         self.add_file_btn = w.QPushButton("add a student copy")
@@ -112,6 +122,11 @@ class ProjectDialog(w.QDialog):
         self.load_existing_copies()
 
     def open_review_dialog(self, path=None):
+        """
+        Open the manual review dialog for a selected student copy
+        :param path:
+        :return:
+        """
         if path is None:
             path = self.get_selected_image_path()
 
@@ -185,6 +200,10 @@ class ProjectDialog(w.QDialog):
                 print(f"[ERREUR] Mise à jour meta.json : {e}")
 
     def get_selected_image_path(self):
+        """
+        Return the file path corresponding to the currently selected item in the list
+        :return:
+        """
         item = self.file_list.currentItem()
         if not item:
             return None
@@ -195,6 +214,11 @@ class ProjectDialog(w.QDialog):
         return None
 
     def open_image(self, item):
+        """
+        Open an image in a viewer dialog when a list item is double-clicked
+        :param item:
+        :return:
+        """
         path = item.data(QtCore.Qt.UserRole)
         print(f"[DEBUG] Tentative d'ouverture : {path}")
 
@@ -213,6 +237,9 @@ class ProjectDialog(w.QDialog):
         viewer.exec()
 
     def load_existing_copies(self):
+        """
+        load and display all subdirectories
+        """
         self.file_list.clear()
         self.current_view_path = self.project_path
 
@@ -224,6 +251,11 @@ class ProjectDialog(w.QDialog):
                 self.file_list.addItem(item)
 
     def display_files_in_directory(self, item):
+        """
+        show all files in directory
+        :param item:
+        :return:
+        """
         if not item.text().startswith("[Dossier] "):
             return
 
@@ -268,12 +300,21 @@ class ProjectDialog(w.QDialog):
             self.stats_display.setVisible(False)
 
     def refresh_file_list(self):
+        """
+        Refresh the list of images in project folder
+        :return:
+        """
         self.file_list.clear()
         for file in os.listdir(self.project_path):
             if file.endswith(('.pdf', '.jpg', '.jpeg', '.png')):
                 self.file_list.addItem(file)
 
     def add_copy_to_project(self):
+        """
+        Open file dialog to import pdf or image to the project
+        uses pdf conversion if necessary
+        :return:
+        """
         dialog = w.QFileDialog(self)
         dialog.setNameFilter("PDF or Images (*.pdf *.png *.jpg *.jpeg)")
         dialog.setFileMode(w.QFileDialog.FileMode.ExistingFile)
@@ -309,10 +350,19 @@ class ProjectDialog(w.QDialog):
                 self.process_image(path)
 
     def show_global_stats(self):
+        """
+        Open dialog window showing global statistics of students marks
+        :return:
+        """
         dialog = StatsDialog(self.project_path, self)
         dialog.exec()
 
     def process_image(self, path):
+        """
+        Image alignement, blocks extraction (fullname / questions), mark detection, and metadata update
+        :param path:
+        :return:
+        """
         self.douteux = {}
         print("-----------------------------------------------------------------------------")
         print("DEBUT DU TRAITEMENT D'IMAGE")
@@ -339,6 +389,9 @@ class ProjectDialog(w.QDialog):
         print("-----------------------------------------------------------------------------")
 
     def _prepare_and_align_image(self, path):
+        """
+        Align the copy with template and stores aligned image
+        """
         project_dir = dirname(path)
         existing = [f for f in os.listdir(project_dir) if f.startswith("copy_") and isdir(join(project_dir, f))]
         index = len(existing) + 1
@@ -363,6 +416,14 @@ class ProjectDialog(w.QDialog):
         return copy_dir, aligned, base_name, ext
 
     def _extract_and_save_blocks(self, aligned, copy_dir, base_name, ext):
+        """
+        Extract and save the name and question blocks
+        :param aligned:
+        :param copy_dir:
+        :param base_name:
+        :param ext:
+        :return:
+        """
         img_name, img_questions = extract_blocks(aligned)
 
         name_path = join(copy_dir, base_name + "_name" + ext)
@@ -380,6 +441,14 @@ class ProjectDialog(w.QDialog):
         return name_path, qst_path
 
     def _process_name_block(self, name_path, base_name, copy_dir):
+        """
+        Name detection from name block and adds it/updates to metadata
+
+        :param name_path:
+        :param base_name:
+        :param copy_dir:
+        :return:
+        """
         try:
             img_name = cv2.imread(name_path)
             centers = cm.detect_and_align_circles(img_name)
@@ -435,6 +504,14 @@ class ProjectDialog(w.QDialog):
             print(f" Erreur détection cercles (haut) : {e}")
 
     def _process_question_block(self, qst_path, copy_dir):
+        """
+        Question detection from name block and adds it/updates to metadata
+
+        :param name_path:
+        :param base_name:
+        :param copy_dir:
+        :return:
+        """
         try:
             img_questions = cv2.imread(qst_path)
             centers = cm.detect_and_align_circles(img_questions)
@@ -523,6 +600,11 @@ class ProjectDialog(w.QDialog):
             print(f" Erreur détection cercles (bas) : {e}")
 
     def _rename_copy_folder_from_meta(self, copy_dir):
+        """
+        Rename student copy directory on creation using name in metadata
+        :param copy_dir:
+        :return:
+        """
         meta_path = os.path.join(copy_dir, "meta.json")
         if not os.path.exists(meta_path):
             return
@@ -564,6 +646,10 @@ class ProjectDialog(w.QDialog):
             print(f"[ERREUR] Impossible de renommer le dossier : {e}")
 
     def addItem(self, path):
+        """
+        Adds an item to list display
+        (only adds one element contrary to refreshfromlist who completely refresh list)
+        """
         name = basename(path)
         if self.file_list.findItems(name, QtCore.Qt.MatchExactly):
             return
@@ -602,6 +688,11 @@ class ProjectDialog(w.QDialog):
             self.file_list.setItemWidget(item, widget)
 
     def edit_student_name(self, path):
+        """
+        Edits student's name and updates in metadata
+        :param path:
+        :return:
+        """
         meta_path = os.path.join(os.path.dirname(path), "meta.json")
         if not os.path.exists(meta_path):
             QtWidgets.QMessageBox.warning(self, "Erreur", "Fichier meta.json introuvable.")
@@ -620,22 +711,40 @@ class ProjectDialog(w.QDialog):
             self.display_stats(path)
 
     def on_image_ready(self, path):
+        """
+        function triggered when a converted image is ready
+        Callback
+        """
         self.process_image(path)
 
     def on_pdf_conversion_done(self, image_paths):
+        """"
+        Callback function triggered when pdf conversion is complete
+        """
         self.progress_bar.setVisible(False)
         print(f"PDF converti : {len(image_paths)} pages → images")
         self.refresh_file_list()
 
     def on_pdf_conversion_error(self, message):
+        """"
+        Callback function triggered when pdf conversion has an error
+        """
         self.progress_bar.setVisible(False)
         w.QMessageBox.critical(self, "Erreur de conversion", message)
 
     def update_progress(self, current, total):
+        """
+        Update progress bar during operation
+        """
         self.progress_bar.setMaximum(total)
         self.progress_bar.setValue(current)
 
     def handle_item_double_click(self, item):
+        """
+        Double click event for list items
+        :param item:
+        :return:
+        """
         path = item.data(QtCore.Qt.UserRole)
 
         if item.text().startswith("⬅️"):
@@ -657,6 +766,11 @@ class ProjectDialog(w.QDialog):
             self.stats_display.setVisible(False)
 
     def display_stats(self, path):
+        """
+        Display statistics for a selected student based on metadata.
+        :param path:
+        :return:
+        """
         meta_path = os.path.join(os.path.dirname(path), "meta.json")
         if not os.path.exists(meta_path):
             self.stats_display.setPlainText("Aucune donnée de score disponible.")
@@ -702,6 +816,14 @@ class ProjectDialog(w.QDialog):
 
 
 def compute_raw_score(filled, correction_path, options=None):
+    """
+    Compute the raw score from filled responses using a correction file
+
+    :param filled:
+    :param correction_path:
+    :param options:
+    :return:
+    """
     if options is None:
         options = {}
 
@@ -740,6 +862,13 @@ def compute_raw_score(filled, correction_path, options=None):
 
 
 def convert_pdf_to_images(pdf_path, output_folder, base_name="page"):
+    """
+    Convert a PDF into a list of image
+    :param pdf_path:
+    :param output_folder:
+    :param base_name:
+    :return:
+    """
     doc = fitz.open(pdf_path)
     image_paths = []
     for i, page in enumerate(doc):
