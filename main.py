@@ -23,16 +23,45 @@ class App(QtWidgets.QWidget):
         self.grid_layout = QtWidgets.QGridLayout(self.content_widget)
         self.grid_layout.setSpacing(10)
 
+        self.change_dir_button = QtWidgets.QPushButton("Changer le chemin des projets")
+        self.change_dir_button.clicked.connect(self.change_project_dir)
+        self.main_layout.addWidget(self.change_dir_button)
+
         self.scroll_area.setWidget(self.content_widget)
         self.main_layout.addWidget(self.scroll_area)
 
+        self.project_dir = self.load_project_dir()
+        os.makedirs(self.project_dir, exist_ok=True)
         self.setup_dirs()
+
+
+
+    def load_project_dir(self):
+        config_path = "config.txt"
+        if os.path.exists(config_path):
+            with open(config_path, "r") as f:
+                return f.read().strip()
+        else:
+            return os.path.abspath("projects")
+
+    def save_project_dir(self, new_path):
+        full_path = os.path.join(new_path, "projects")
+        os.makedirs(full_path, exist_ok=True)
+        with open("config.txt", "w") as f:
+            f.write(full_path)
+        self.project_dir = full_path
+        self.setup_dirs()
+
+    def change_project_dir(self):
+        new_dir = QtWidgets.QFileDialog.getExistingDirectory(self, "Choisir un nouveau dossier de projets")
+        if new_dir:
+            self.save_project_dir(new_dir)
 
 
     def list_projects(self) -> list[str]:
         return sorted(
-            f for f in os.listdir(cons.DIR_PATH)
-            if isdir(join(cons.DIR_PATH, f))
+            f for f in os.listdir(self.project_dir)
+            if isdir(join(self.project_dir, f))
         )
 
     def setup_dirs(self):
@@ -46,6 +75,8 @@ class App(QtWidgets.QWidget):
     def load_projects(self):
         self.create_project_UI("New project", is_project=False)
         for index, project_name in enumerate(self.list_projects()):
+            if project_name == "__temp__":
+                continue
             self.create_project_UI(project_name, index + 1)
             
     def create_project_UI(self, project_name, index=None, is_project=True):
@@ -79,15 +110,16 @@ class App(QtWidgets.QWidget):
             self.grid_layout.addWidget(container, row, col)
             
     def open_project(self, project_name):
-        project_path = join(cons.DIR_PATH, project_name)
+        project_path = join(self.project_dir, project_name)
         dialog = ProjectDialog(project_name, project_path, self)
         dialog.exec()
         
     def create_new_project(self):
-        dialog = UploadFile(self)
+        dialog = UploadFile(self, project_dir=self.project_dir)
         dialog.setModal(True) # block parent window
         if dialog.exec():
-            self.load_projects()
+            self.setup_dirs()
+
 
 if __name__ == "__main__":
     app = QtWidgets.QApplication(sys.argv)
