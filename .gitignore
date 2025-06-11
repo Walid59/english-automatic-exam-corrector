@@ -10,5 +10,4 @@ venv
 dataset_patches
 resultat.pdf
 config.txt
-train_circle_classifier.py
 resources/templates/inutile
