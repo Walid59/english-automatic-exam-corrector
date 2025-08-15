@@ -22,6 +22,10 @@ jobs:
         with:
           python-version: "3.11.9"
 
+      - name: Install Visual C++ Redistributable (Windows)
+        if: runner.os == 'Windows'
+        run: choco install vcredist2015 -y
+
       - name: Install system dependencies (Linux/macOS)
         if: runner.os != 'Windows'
         run: |
@@ -29,21 +33,48 @@ jobs:
             brew install ta-lib
           else
             sudo apt-get update
-            sudo apt-get install -y libta-lib0 libta-lib-dev
+            sudo apt-get install -y build-essential wget
+            wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz
+            tar -xvzf ta-lib-0.4.0-src.tar.gz
+            cd ta-lib
+            ./configure --prefix=/usr
+            make
+            sudo make install
           fi
+        shell: bash
 
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
           pip install pyinstaller
-          pip install -r deps.txt
-          pip install TA-Lib
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            pip install -r deps.txt pywin32 pywinpty TA-Lib scikit-learn
+          else
+            pip install -r deps.txt TA-Lib scikit-learn
+          fi
+        shell: bash
+
       - name: Build with PyInstaller
         run: |
+          # --- Créer un fichier hook temporaire pour scikit-learn ---
+          echo "from PyInstaller.utils.hooks import collect_dynamic_libs
+          hiddenimports = ['sklearn.utils._cython_blas', 'sklearn._libsvm']
+          binaries = collect_dynamic_libs('sklearn')" > sklearn_hook.py
+
           if [[ "$RUNNER_OS" == "Windows" ]]; then
-            pyinstaller main.py --onedir --contents-directory "." --add-data "circle_patch_classifier.joblib;." --add-data "resources;resources" --add-data "tools;tools"
+            pyinstaller main.py \
+              --onedir \
+              --additional-hooks-dir=. \
+              --add-data "circle_patch_classifier.joblib;." \
+              --add-data "resources;resources" \
+              --add-data "tools;tools"
           else
-            pyinstaller main.py --onedir --contents-directory "." --add-data "circle_patch_classifier.joblib:." --add-data "resources:resources" --add-data "tools:tools"
+            pyinstaller main.py \
+              --onedir \
+              --additional-hooks-dir=. \
+              --add-data "circle_patch_classifier.joblib:." \
+              --add-data "resources:resources" \
+              --add-data "tools:tools"
           fi
         shell: bash
 
