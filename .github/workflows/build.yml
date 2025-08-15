@@ -58,8 +58,8 @@ jobs:
         run: |
           # --- Créer un fichier hook temporaire pour scikit-learn ---
           echo "from PyInstaller.utils.hooks import collect_dynamic_libs
-hiddenimports = ['sklearn.utils._cython_blas', 'sklearn._libsvm']
-binaries = collect_dynamic_libs('sklearn')" > sklearn_hook.py
+          hiddenimports = ['sklearn.utils._cython_blas', 'sklearn._libsvm']
+          binaries = collect_dynamic_libs('sklearn')" > sklearn_hook.py
 
           if [[ "$RUNNER_OS" == "Windows" ]]; then
             pyinstaller main.py \
