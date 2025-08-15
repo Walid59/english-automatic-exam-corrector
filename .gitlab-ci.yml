@@ -1,19 +1,69 @@
-sonarqube-check:
-  image:
-    name: sonarsource/sonar-scanner-cli:latest
-    entrypoint: [""]
-  variables:
-    PROXY: "-Dhttp.proxyHost=cache-etu.univ-artois.fr -Dhttp.proxyPort=3128 -Dhttps.proxyHost=cache-etu.univ-artois.fr -Dhttps.proxyPort=3128 -Dhttp.nonProxyHosts=localhost|*.cril-k8s.lan"
-    SONARINFO: "-Dsonar.host.url=https://sonarqube.univ-artois.fr/ -Dsonar.login=$SONARTOKEN -Dsonar.projectName=$CI_PROJECT_NAMESPACE  -Dsonar.projectKey=$CI_PROJECT_NAMESPACE"
+stages:
+  - build
 
-    SONAR_USER_HOME: "${CI_PROJECT_DIR}/.sonar"  # Defines the location of the analysis task cache
-    GIT_DEPTH: "0"  # Tells git to fetch all the branches of the project, required by the analysis task
-  cache:
-    key: "${CI_JOB_NAME}"
-    paths:
-      - .sonar/cache
+variables:
+  PYTHON_VERSION: "3.11.9"
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+
+# --------------------------
+# Build Linux
+# --------------------------
+build_linux:
+  stage: build
+  image: python:${PYTHON_VERSION}
   script:
-    - sonar-scanner
-  allow_failure: true
-  only:
-    - main
+    - pip install --upgrade pip
+    - pip install pyinstaller
+    - pip install -r requirements.txt
+    - pyinstaller main.py --onedir --contents-directory "." \
+        --add-data "circle_patch_classifier.joblib:." \
+        --add-data "resources:resources" \
+        --add-data "tools:tools"
+  artifacts:
+    paths:
+      - dist/
+    name: "linux-build"
+    expire_in: 1 week
+
+# --------------------------
+# Build Windows
+# --------------------------
+build_windows:
+  stage: build
+  tags:
+    - windows
+  script:
+    - pip install --upgrade pip
+    - pip install pyinstaller
+    - pip install -r requirements.txt
+    - pyinstaller main.py --onedir --contents-directory "." ^
+        --add-data "circle_patch_classifier.joblib;." ^
+        --add-data "resources;resources" ^
+        --add-data "tools;tools"
+  artifacts:
+    paths:
+      - dist/
+    name: "windows-build"
+    expire_in: 1 week
+
+# --------------------------
+# Build macOS
+# --------------------------
+build_macos:
+  stage: build
+  tags:
+    - macos
+  script:
+    - brew install python@${PYTHON_VERSION}
+    - python3 -m pip install --upgrade pip
+    - python3 -m pip install pyinstaller
+    - python3 -m pip install -r requirements.txt
+    - pyinstaller main.py --onedir --contents-directory "." \
+        --add-data "circle_patch_classifier.joblib:." \
+        --add-data "resources:resources" \
+        --add-data "tools:tools"
+  artifacts:
+    paths:
+      - dist/
+    name: "macos-build"
+    expire_in: 1 week

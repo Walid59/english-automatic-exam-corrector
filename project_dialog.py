@@ -2,15 +2,13 @@
 import csv
 import json
 import os
+import sys
 import shutil
 from os.path import join, basename, splitext, isdir, dirname, isfile, exists
 
 import cv2
 from PySide6 import QtWidgets as w, QtGui, QtCore, QtWidgets
 from PySide6.QtCore import QThread
-
-import \
-    fitz  # conversion pdf vers image (meilleur que pdf2image : + opti MAIS quand même trop lent -> chercher une solution d'opti plus tard.)
 
 from alignment import align_using_features, extract_blocks
 from image_dialog import ImageViewerDialog
@@ -21,10 +19,24 @@ import circle_manager as cm
 from train_circle_classifier import filter_relative_winner
 from stats import StatsDialog
 
-import joblib
 import unicodedata
 
-model = joblib.load("circle_patch_classifier.joblib")
+
+from joblib import load
+
+def resource_path(relative_path: str) -> str:
+    """Retourne le chemin absolu vers une ressource embarquée
+    compatible dev (fichiers à côté du code) et PyInstaller (--onefile or folder)."""
+    if getattr(sys, 'frozen', False):
+        # quand PyInstaller gèle (--onefile et --onedir)
+        base = getattr(sys, '_MEIPASS', os.path.dirname(sys.executable))
+    else:
+        base = os.path.abspath(os.path.dirname(__file__))
+    return os.path.join(base, relative_path)
+
+model_path = resource_path("circle_patch_classifier.joblib")
+model = load(model_path)
+
 
 ACCENTS = ["ˆ", "°", "`", "´", "”", "~", "¸"]
 LETTERS = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
@@ -859,21 +871,3 @@ def compute_raw_score(filled, correction_path, options=None):
     except Exception as e:
         print(f"[ERREUR] Lecture du fichier de correction ou calcul du score : {e}")
         return None
-
-
-def convert_pdf_to_images(pdf_path, output_folder, base_name="page"):
-    """
-    Convert a PDF into a list of image
-    :param pdf_path:
-    :param output_folder:
-    :param base_name:
-    :return:
-    """
-    doc = fitz.open(pdf_path)
-    image_paths = []
-    for i, page in enumerate(doc):
-        pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))  # résolution 2x
-        output_path = join(output_folder, f"{base_name}_{i + 1}.png")
-        pix.save(output_path)
-        image_paths.append(output_path)
-    return image_paths
