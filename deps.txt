@@ -113,7 +113,6 @@ python-dateutil==2.9.0.post0
 python-json-logger==2.0.7
 pytz==2024.2
 pywin32-ctypes==0.2.3
-pywinpty==2.0.14
 PyYAML==6.0.2
 pyzmq==26.2.0
 referencing==0.35.1
@@ -155,5 +154,6 @@ websocket-client==1.8.0
 websockets==13.1
 widgetsnbextension==4.0.13
 yarl==1.13.1
+
 
 
