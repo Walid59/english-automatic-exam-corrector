@@ -12,6 +12,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -23,24 +24,28 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install --upgrade pip
+          python -m pip install --upgrade pip
           pip install pyinstaller
 
-      - name: Build executable
+      - name: Build on Windows
+        if: runner.os == 'Windows'
+        shell: powershell
         run: |
-          if [[ "$RUNNER_OS" == "Windows" ]]; then
+          py -3 -m PyInstaller --onedir --clean `
+            --add-data "circle_patch_classifier.joblib;." `
+            --add-data "resources;resources" `
+            --add-data "tools;tools" `
+            main.py
 
-            pyinstaller main.py --onedir --contents-directory "." `
-              --add-data "circle_patch_classifier.joblib;." `
-              --add-data "resources;resources" `
-              --add-data "tools;tools"
-          else
-
-            pyinstaller main.py --onedir --contents-directory "." \
-              --add-data "circle_patch_classifier.joblib:." \
-              --add-data "resources:resources" \
-              --add-data "tools:tools"
-          fi
+      - name: Build on Linux / macOS
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          py -3 -m PyInstaller --onedir --clean \
+            --add-data "circle_patch_classifier.joblib:." \
+            --add-data "resources:resources" \
+            --add-data "tools:tools" \
+            main.py
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
