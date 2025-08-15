@@ -22,26 +22,21 @@ jobs:
         with:
           python-version: "3.11.9"
 
-      - name: Install dependencies
+      - name: Install system dependencies (macOS/Linux)
+        if: runner.os != 'Windows'
         run: |
-          python -m pip install --upgrade pip
-          if [[ "$RUNNER_OS" == "Windows" ]]; then
-            pip install -r deps.txt
-            pip install pyinstaller
-            pip install TA-Lib-0.4.32-cp311-cp311-win_amd64.whl
-          elif [[ "$RUNNER_OS" == "macOS" ]]; then
+          if [[ "$RUNNER_OS" == "macOS" ]]; then
             brew install ta-lib
-            pip install -r deps.txt
-            pip install pyinstaller
-            pip install TA-Lib
           else
             sudo apt-get update
             sudo apt-get install -y libta-lib0 libta-lib-dev
-            pip install -r deps.txt
-            pip install pyinstaller
-            pip install TA-Lib
           fi
-        shell: bash
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller
+          pip install -r deps.txt
 
       - name: Build with PyInstaller
         run: |
