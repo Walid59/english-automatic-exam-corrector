@@ -31,7 +31,9 @@ jobs:
         if: runner.os == 'Windows'
         shell: powershell
         run: |
-          py -3 -m PyInstaller --onedir --clean `
+          python -m pip install --upgrade pip
+          pip install pyinstaller
+          python -m PyInstaller --onedir --clean `
             --add-data "circle_patch_classifier.joblib;." `
             --add-data "resources;resources" `
             --add-data "tools;tools" `
@@ -41,11 +43,14 @@ jobs:
         if: runner.os != 'Windows'
         shell: bash
         run: |
-          py -3 -m PyInstaller --onedir --clean \
+          python -m pip install --upgrade pip
+          pip install pyinstaller
+          python -m PyInstaller --onedir --clean \
             --add-data "circle_patch_classifier.joblib:." \
             --add-data "resources:resources" \
             --add-data "tools:tools" \
             main.py
+
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
