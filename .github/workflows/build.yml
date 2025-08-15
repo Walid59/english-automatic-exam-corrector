@@ -64,7 +64,7 @@ jobs:
           if [[ "$RUNNER_OS" == "Windows" ]]; then
             pyinstaller main.py \
               --onedir \
-              --additional-hooks-dir=. \
+              --additional-hooks-dir=hooks \
               --add-data "circle_patch_classifier.joblib;." \
               --add-data "resources;resources" \
               --add-data "tools;tools"
