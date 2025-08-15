@@ -1,0 +1,50 @@
+name: Build executables
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11.9'
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build executable
+        run: |
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+
+            pyinstaller main.py --onedir --contents-directory "." `
+              --add-data "circle_patch_classifier.joblib;." `
+              --add-data "resources;resources" `
+              --add-data "tools;tools"
+          else
+
+            pyinstaller main.py --onedir --contents-directory "." \
+              --add-data "circle_patch_classifier.joblib:." \
+              --add-data "resources:resources" \
+              --add-data "tools:tools"
+          fi
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ runner.os }}-build
+          path: dist/
