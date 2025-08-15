@@ -1,0 +1,69 @@
+stages:
+  - build
+
+variables:
+  PYTHON_VERSION: "3.11.9"
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+
+# --------------------------
+# Build Linux
+# --------------------------
+build_linux:
+  stage: build
+  image: python:${PYTHON_VERSION}
+  script:
+    - pip install --upgrade pip
+    - pip install pyinstaller
+    - pip install -r requirements.txt
+    - pyinstaller main.py --onedir --contents-directory "." \
+        --add-data "circle_patch_classifier.joblib:." \
+        --add-data "resources:resources" \
+        --add-data "tools:tools"
+  artifacts:
+    paths:
+      - dist/
+    name: "linux-build"
+    expire_in: 1 week
+
+# --------------------------
+# Build Windows
+# --------------------------
+build_windows:
+  stage: build
+  tags:
+    - windows
+  script:
+    - pip install --upgrade pip
+    - pip install pyinstaller
+    - pip install -r requirements.txt
+    - pyinstaller main.py --onedir --contents-directory "." ^
+        --add-data "circle_patch_classifier.joblib;." ^
+        --add-data "resources;resources" ^
+        --add-data "tools;tools"
+  artifacts:
+    paths:
+      - dist/
+    name: "windows-build"
+    expire_in: 1 week
+
+# --------------------------
+# Build macOS
+# --------------------------
+build_macos:
+  stage: build
+  tags:
+    - macos
+  script:
+    - brew install python@${PYTHON_VERSION}
+    - python3 -m pip install --upgrade pip
+    - python3 -m pip install pyinstaller
+    - python3 -m pip install -r requirements.txt
+    - pyinstaller main.py --onedir --contents-directory "." \
+        --add-data "circle_patch_classifier.joblib:." \
+        --add-data "resources:resources" \
+        --add-data "tools:tools"
+  artifacts:
+    paths:
+      - dist/
+    name: "macos-build"
+    expire_in: 1 week
