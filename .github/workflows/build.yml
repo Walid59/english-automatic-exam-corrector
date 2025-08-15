@@ -22,7 +22,7 @@ jobs:
         with:
           python-version: "3.11.9"
 
-      - name: Install system dependencies (macOS/Linux)
+      - name: Install system dependencies (Linux/macOS)
         if: runner.os != 'Windows'
         run: |
           if [[ "$RUNNER_OS" == "macOS" ]]; then
