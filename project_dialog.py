@@ -10,65 +10,13 @@ import cv2
 from PySide6 import QtWidgets as w, QtGui, QtCore, QtWidgets
 from PySide6.QtCore import QThread
 
-from alignment import align_using_features, extract_blocks
 from image_dialog import ImageViewerDialog
+from image_worker import ImageProcessingWorker
 from pdf_manager import PDFConversionManager
 from manual_review_dialog import ManualReviewDialog
 from meta_updater import update_score_in_meta
 import circle_manager as cm
-from train_circle_classifier import filter_relative_winner
 from stats import StatsDialog
-
-import unicodedata
-
-
-from joblib import load
-
-def resource_path(relative_path: str) -> str:
-    """Retourne le chemin absolu vers une ressource embarquée
-    compatible dev (fichiers à côté du code) et PyInstaller (--onefile or folder)."""
-    if getattr(sys, 'frozen', False):
-        # quand PyInstaller gèle (--onefile et --onedir)
-        base = getattr(sys, '_MEIPASS', os.path.dirname(sys.executable))
-    else:
-        base = os.path.abspath(os.path.dirname(__file__))
-    return os.path.join(base, relative_path)
-
-model_path = resource_path("circle_patch_classifier.joblib")
-model = load(model_path)
-
-
-ACCENTS = ["ˆ", "°", "`", "´", "”", "~", "¸"]
-LETTERS = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
-           "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "-", ","]
-
-ACCENT_COMBINATIONS = {
-    # ˆ
-    ("ˆ", "A"): "Â", ("ˆ", "E"): "Ê", ("ˆ", "I"): "Î",
-    ("ˆ", "O"): "Ô", ("ˆ", "U"): "Û",
-
-    # °
-    ("°", "A"): "Å",
-
-    # ´
-    ("´", "A"): "Á", ("´", "E"): "É", ("´", "I"): "Í",
-    ("´", "O"): "Ó", ("´", "U"): "Ú",
-
-    # Tréma ..
-    ("”", "A"): "Ä", ("”", "E"): "Ë", ("”", "I"): "Ï",
-    ("”", "O"): "Ö", ("”", "U"): "Ü", ("”", "Y"): "Ÿ",
-
-    # Tilde ~
-    ("~", "A"): "Ã", ("~", "N"): "Ñ", ("~", "O"): "Õ",
-
-    # Cédille ¸
-    ("¸", "C"): "Ç",
-
-    # Accent grave `
-    ("`", "A"): "À",
-    ("`", "E"): "È",
-    ("`", "U"): "Ù",
-}
 
 
 class ProjectDialog(w.QDialog):
@@ -79,6 +27,11 @@ class ProjectDialog(w.QDialog):
         :param project_path: path of the project
         :param parent: parent
         """
+        self.image_jobs = {}   # {path: (thread, worker)}
+        self.pdf_thread = None
+        self.pdf_worker = None
+        self.image_threads = []   # pour conserver des refs jusqu’au cleanup
+
         super().__init__(parent)
         self.template = cv2.imread("resources/templates/Answer_sheet.jpg")
 
@@ -338,24 +291,26 @@ class ProjectDialog(w.QDialog):
             if ext == ".pdf":
                 base_name = splitext(basename(selected_file))[0]
 
-                self.thread = QThread()
-                self.worker = PDFConversionManager(selected_file, self.project_path, base_name)
-                self.worker.moveToThread(self.thread)
+                self.pdf_thread = QThread(self)
+                self.pdf_worker = PDFConversionManager(selected_file, self.project_path, base_name)
+                self.pdf_worker.moveToThread(self.pdf_thread)
 
-                self.worker.image_ready.connect(self.on_image_ready)
-                self.worker.progress.connect(self.update_progress)
-                self.worker.finished.connect(self.on_pdf_conversion_done)
-                self.worker.error.connect(self.on_pdf_conversion_error)
+                self.pdf_worker.image_ready.connect(self.on_image_ready)
+                self.pdf_worker.progress.connect(self.update_progress)
+                self.pdf_worker.finished.connect(self.on_pdf_conversion_done)
+                self.pdf_worker.error.connect(self.on_pdf_conversion_error)
 
-                self.thread.started.connect(self.worker.run)
-                self.worker.finished.connect(self.thread.quit)
-                self.worker.finished.connect(self.worker.deleteLater)
-                self.thread.finished.connect(self.thread.deleteLater)
+                self.pdf_worker.finished.connect(self.pdf_thread.quit)
+
+                self.pdf_thread.finished.connect(self.pdf_worker.deleteLater)
+                self.pdf_thread.finished.connect(self.pdf_thread.deleteLater)
+
+                self.pdf_thread.started.connect(self.pdf_worker.run)
 
                 self.progress_bar.setVisible(True)
                 self.progress_bar.setValue(0)
+                self.pdf_thread.start()
 
-                self.thread.start()
             else:
                 path = join(self.project_path, basename(selected_file))
                 shutil.copy(selected_file, path)
@@ -369,293 +324,72 @@ class ProjectDialog(w.QDialog):
         dialog = StatsDialog(self.project_path, self)
         dialog.exec()
 
-    def process_image(self, path):
-        """
-        Image alignement, blocks extraction (fullname / questions), mark detection, and metadata update
-        :param path:
-        :return:
-        """
-        self.douteux = {}
-        print("-----------------------------------------------------------------------------")
-        print("DEBUT DU TRAITEMENT D'IMAGE")
-        print("fichier: " + path)
+    def start_image_processing(self, path):
+        print("[PD] start_image_processing", path)
+        thread = QThread(self)
+        worker = ImageProcessingWorker(path, self.template, self.project_path)
+        worker.moveToThread(thread)
 
-        copy_dir, aligned, base_name, ext = self._prepare_and_align_image(path)
-        name_path, qst_path = self._extract_and_save_blocks(aligned, copy_dir, base_name, ext)
+        # Brancher les signaux AVANT de démarrer
+        worker.progress.connect(self.update_progress)
+        worker.processed.connect(self.on_image_processed)
+        worker.needManualReview.connect(self.on_need_manual_review)
+        worker.error.connect(self.on_image_error)
 
-        self._process_name_block(name_path, base_name, copy_dir)
-        self._process_question_block(qst_path, copy_dir)
+        thread.started.connect(worker.run)
+        # Arrêt du thread sur fin OU erreur
+        worker.processed.connect(thread.quit)
+        worker.error.connect(thread.quit)
 
-        if hasattr(self, "douteux") and self.douteux:
-            print(f"[INFO] Questions douteuses détectées : ouverture automatique de la révision")
-            self.open_review_dialog(qst_path)
+        # Cleanup Qt
+        thread.finished.connect(worker.deleteLater)
+        thread.finished.connect(thread.deleteLater)
 
-        new_dir = self._rename_copy_folder_from_meta(copy_dir)
-        if new_dir:
-            copy_dir = new_dir
+        # ✅ Garder des références Python vivantes
+        self.image_jobs[path] = (thread, worker)
+
+        # Nettoyage de notre registre quand le thread a fini
+        def _cleanup():
+            self.image_jobs.pop(path, None)
+        thread.finished.connect(_cleanup)
+
+        self.progress_bar.setVisible(True)
+        self.progress_bar.setValue(0)
+        print("[PD] thread.start() (image)")
+        thread.start()
+
+            
+      
+    def on_image_processed(self, result: dict):
+        # Mise à jour des données
+        path = result["image"]
+        self.copy_data[path] = {
+            "image": result["image"],
+            "filled": result["filled"],
+            "centers": result["centers"]
+        }
+        self.douteux = result["douteux"]
+
+        # Ajout dans la liste UI
+        copy_dir = result["copy_dir"]
         final_name = os.path.basename(copy_dir)
         item = QtWidgets.QListWidgetItem(f"[Dossier] {final_name}")
         item.setData(QtCore.Qt.UserRole, copy_dir)
         self.file_list.addItem(item)
-        print("FIN DU TRAITEMENT D'IMAGE")
-        print("-----------------------------------------------------------------------------")
 
-    def _prepare_and_align_image(self, path):
-        """
-        Align the copy with template and stores aligned image
-        """
-        project_dir = dirname(path)
-        existing = [f for f in os.listdir(project_dir) if f.startswith("copy_") and isdir(join(project_dir, f))]
-        index = len(existing) + 1
-        copy_dir = join(project_dir, f"copy_{index}")
-        os.makedirs(copy_dir, exist_ok=True)
+        self.progress_bar.setVisible(False)
 
-        base, ext = splitext(path)
-        base_name = basename(base)
+    def on_need_manual_review(self, path, douteux):
+        self.douteux = douteux
+        self.open_review_dialog(path)
 
-        img = cv2.imread(path)
-        template = self.template
+    def on_image_error(self, msg):
+        self.progress_bar.setVisible(False)
+        QtWidgets.QMessageBox.critical(self, "Erreur traitement", msg)
 
-        aligned, ok = align_using_features(img, template)
-        if not ok:
-            print("[INFO] Alignement échoué, image laissée telle quelle")
-            aligned = img
+    def process_image(self, path):
+        self.start_image_processing(path)
 
-        new_path = join(copy_dir, basename(path))
-        cv2.imwrite(new_path, aligned)
-        print("[INFO] Alignement réussi")
-
-        return copy_dir, aligned, base_name, ext
-
-    def _extract_and_save_blocks(self, aligned, copy_dir, base_name, ext):
-        """
-        Extract and save the name and question blocks
-        :param aligned:
-        :param copy_dir:
-        :param base_name:
-        :param ext:
-        :return:
-        """
-        img_name, img_questions = extract_blocks(aligned)
-
-        name_path = join(copy_dir, base_name + "_name" + ext)
-        qst_path = join(copy_dir, base_name + "_questions" + ext)
-
-        clean_name_path = join(copy_dir, base_name + "_name_clean" + ext)
-        clean_qst_path = join(copy_dir, base_name + "_questions_clean" + ext)
-
-        cv2.imwrite(name_path, img_name)
-        cv2.imwrite(qst_path, img_questions)
-        cv2.imwrite(clean_name_path, img_name)
-        cv2.imwrite(clean_qst_path, img_questions)
-
-        print("Separation des 2 blocs OK")
-        return name_path, qst_path
-
-    def _process_name_block(self, name_path, base_name, copy_dir):
-        """
-        Name detection from name block and adds it/updates to metadata
-
-        :param name_path:
-        :param base_name:
-        :param copy_dir:
-        :return:
-        """
-        try:
-            img_name = cv2.imread(name_path)
-            centers = cm.detect_and_align_circles(img_name)
-            gray_name = cv2.cvtColor(img_name, cv2.COLOR_BGR2GRAY)
-
-            filled = []
-            for (x, y) in centers:
-                patch = gray_name[y - 15:y + 15, x - 15:x + 15]
-                filled.append(
-                    model.predict_proba(patch.reshape(1, -1))[0, 1] > 0.5 if patch.shape == (30, 30) else False)
-
-            try:
-                col_x, y_lines = cm.recentre_colonnes_nom_prenom(centers)
-                filled_triplets = [(x, y, int(f)) for (x, y), f in zip(centers, filled)]
-                nom = ""
-
-                for x_ref in col_x:
-                    col_circles = [(x, y) for (x, y, v) in filled_triplets if v and abs(x - x_ref) < 10]
-                    if not col_circles:
-                        nom += " "
-                        continue
-
-                    acc_idx = next((j for j in range(7) if
-                                    j < len(y_lines) and any(abs(yc - y_lines[j]) < 5 for _, yc in col_circles)), -1)
-                    let_idx = next((j - 7 for j in range(7, 35) if
-                                    j < len(y_lines) and any(abs(yc - y_lines[j]) < 5 for _, yc in col_circles)), -1)
-
-                    if let_idx != -1:
-                        char = LETTERS[let_idx]
-                        accent = ACCENTS[acc_idx] if acc_idx != -1 else ""
-                        nom += ACCENT_COMBINATIONS.get((accent, char), accent + char)
-                    else:
-                        nom += " "
-
-                nom = " ".join(nom.strip().split())
-                print(f"[INFO] Nom détecté : « {nom} »")
-
-                meta_path = os.path.join(copy_dir, "meta.json")
-                data = {}
-                if os.path.exists(meta_path):
-                    with open(meta_path, "r") as f:
-                        data = json.load(f)
-                data["nom"] = nom
-                with open(meta_path, "w") as f:
-                    json.dump(data, f, indent=2)
-
-            except Exception as e:
-                print(f"[ERREUR] détection nom/prénom : {e}")
-
-            cm.trace_circles(img_name, centers, filled, name_path, douteux_centers=[])
-
-        except Exception as e:
-            print(f" Erreur détection cercles (haut) : {e}")
-
-    def _process_question_block(self, qst_path, copy_dir):
-        """
-        Question detection from name block and adds it/updates to metadata
-
-        :param name_path:
-        :param base_name:
-        :param copy_dir:
-        :return:
-        """
-        try:
-            img_questions = cv2.imread(qst_path)
-            centers = cm.detect_and_align_circles(img_questions)
-            gray_questions = cv2.cvtColor(img_questions, cv2.COLOR_BGR2GRAY)
-
-            probas = []
-            for (x, y) in centers:
-                patch = gray_questions[y - 15:y + 15, x - 15:x + 15]
-                probas.append(model.predict_proba(patch.reshape(1, -1))[0, 1] if patch.shape == (30, 30) else 0.0)
-
-            # Construction grille
-            nb_rows, nb_cols = 25, 8
-            grid_scores = [[[] for _ in range(nb_cols)] for _ in range(nb_rows)]
-            grid_centers = [[[] for _ in range(nb_cols)] for _ in range(nb_rows)]
-            for i in range(0, len(probas), 4):
-                row, col = (i // 4) // nb_cols, (i // 4) % nb_cols
-                grid_scores[row][col] = probas[i:i + 4]
-                grid_centers[row][col] = centers[i:i + 4]
-
-            centers_sorted, filled, question_to_index = [], [], {}
-            for col in range(nb_cols):
-                for row in range(nb_rows):
-                    question_number = col * nb_rows + row + 1
-                    scores = grid_scores[row][col]
-                    cts = grid_centers[row][col]
-                    if len(scores) != 4 or len(cts) != 4:
-                        print(f"[WARN] Q{question_number} ignorée (groupe incomplet)")
-                        continue
-                    result = filter_relative_winner(scores, margin=0.2, question_number=question_number, parent=self)
-                    question_to_index[question_number] = len(centers_sorted)
-                    filled += result if sum(result) else [False] * 4
-                    centers_sorted.extend(cts)
-
-            if len(filled) != len(centers_sorted):
-                raise ValueError("probleme entre le nombre de cercles et les scores")
-
-            print(f"[INFO] Cercles détectés : {len(centers_sorted)} — remplis : {sum(filled)}")
-
-            douteux_centers = []
-            if hasattr(self, "douteux") and self.douteux:
-                for q in self.douteux:
-                    start_idx = question_to_index.get(q)
-                    if start_idx is not None:
-                        douteux_centers.extend(
-                            [(int(pt[0]), int(pt[1])) for pt in centers_sorted[start_idx:start_idx + 4]])
-
-            meta_path = os.path.join(dirname(qst_path), "meta.json")
-
-            # Charger les données si le projet existe
-            if os.path.exists(meta_path):
-                with open(meta_path, "r") as f:
-                    existing = json.load(f)
-            else:
-                existing = {}
-
-            # pareil pour les questions
-            existing.update({
-                "image": qst_path,
-                "filled": filled,
-                "centers": [list(map(int, pt)) for pt in centers_sorted],
-                "douteux": self.douteux if hasattr(self, "douteux") else {}
-            })
-
-            with open(meta_path, "w") as f:
-                json.dump(existing, f, indent=2)
-
-            correction_path = os.path.join(self.project_path, "toeic_correction.csv")
-            if os.path.exists(correction_path):
-                update_score_in_meta(meta_path, filled, correction_path)
-                print(f"[INFO] Scores mis à jour dans meta.json.")
-            else:
-                print(f"[WARN] Fichier toeic_correction.csv introuvable dans le projet.")
-
-            cm.trace_circles(img_questions, centers_sorted, filled, qst_path, douteux_centers=douteux_centers)
-
-            self.last_questions_image = qst_path
-            self.last_centers = centers_sorted
-            self.last_filled = filled
-            self.copy_data[qst_path] = {
-                "image": qst_path,
-                "centers": centers_sorted,
-                "filled": filled
-            }
-
-        except Exception as e:
-            print(f" Erreur détection cercles (bas) : {e}")
-
-    def _rename_copy_folder_from_meta(self, copy_dir):
-        """
-        Rename student copy directory on creation using name in metadata
-        :param copy_dir:
-        :return:
-        """
-        meta_path = os.path.join(copy_dir, "meta.json")
-        if not os.path.exists(meta_path):
-            return
-
-        try:
-            with open(meta_path, "r") as f:
-                meta = json.load(f)
-            nom = meta.get("nom", "").strip()
-            if not nom:
-                return
-
-            # Normalisation du nom
-            nom_norm = unicodedata.normalize("NFKD", nom)
-            nom_ascii = ''.join(c for c in nom_norm if not unicodedata.combining(c))
-            nom_clean = nom_ascii.title().replace(" ", "_")
-
-            # renommage
-            new_dir = os.path.join(os.path.dirname(copy_dir), nom_clean)
-
-            if new_dir == copy_dir:
-                return
-
-            if os.path.exists(new_dir):
-                print(f"[WARN] Le dossier {new_dir} existe déjà, renommage annulé.")
-                return
-
-            try:
-                os.rename(copy_dir, new_dir)
-                print(f"[INFO] Dossier renommé avec succès : {new_dir}")
-            except PermissionError:
-                print(f"[WARN] os.rename échoué (PermissionError). Tentative de copie...")
-
-                shutil.copytree(copy_dir, new_dir)
-                shutil.rmtree(copy_dir)
-                print(f"[INFO] Dossier copié puis supprimé : {new_dir}")
-
-            return new_dir
-        except Exception as e:
-            print(f"[ERREUR] Impossible de renommer le dossier : {e}")
 
     def addItem(self, path):
         """
@@ -727,22 +461,33 @@ class ProjectDialog(w.QDialog):
         function triggered when a converted image is ready
         Callback
         """
+        print(f"[PD] on_image_ready: {path}")
+
+        # ⚡ Lancer le même pipeline que pour une image classique
         self.process_image(path)
 
     def on_pdf_conversion_done(self, image_paths):
-        """"
-        Callback function triggered when pdf conversion is complete
-        """
-        self.progress_bar.setVisible(False)
-        print(f"PDF converti : {len(image_paths)} pages → images")
-        self.refresh_file_list()
+        print("[PD] on_pdf_conversion_done ENTER")
+        try:
+            self.progress_bar.setVisible(False)
+            print(f"[PD] pages converted: {len(image_paths)}")
+
+        finally:
+            if self.pdf_thread and self.pdf_thread.isRunning():
+                self.pdf_thread.quit()
+                self.pdf_thread.wait()
+            self.pdf_thread = None
+            self.pdf_worker = None
+            print("[PD] on_pdf_conversion_done EXIT")
+
+
 
     def on_pdf_conversion_error(self, message):
-        """"
-        Callback function triggered when pdf conversion has an error
-        """
+        print("[PD] on_pdf_conversion_error ENTER")
         self.progress_bar.setVisible(False)
+        print("[PD] ERROR MESSAGE:", message)
         w.QMessageBox.critical(self, "Erreur de conversion", message)
+        print("[PD] on_pdf_conversion_error EXIT")
 
     def update_progress(self, current, total):
         """

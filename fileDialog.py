@@ -49,7 +49,7 @@ class UploadFile(w.QDialog):
         layout.addLayout(name_layout)
 
         self.mode_group = w.QButtonGroup(self)
-        self.radio_import = w.QRadioButton("Import a corrected file (PDF or image file)")
+        self.radio_import = w.QRadioButton("Import from an existing project (CSV)")
         self.radio_manual = w.QRadioButton("Create correction manually")
         self.radio_import.setChecked(True)
 
@@ -266,7 +266,13 @@ class UploadFile(w.QDialog):
                 if not self.selected_files:
                     w.QMessageBox.warning(self, "Missing File", "Please select a file to import.")
                     return
-                copy(self.selected_files[0], project_path)
+                src = self.selected_files[0]
+                ext = os.path.splitext(src)[1].lower()
+
+                if ext == ".csv":
+                    # Copie directe du fichier de correction
+                    dst = os.path.join(project_path, "toeic_correction.csv")
+                    copy(src, dst)
 
             elif self.radio_manual.isChecked():
                 if self.radio_manual_toeic.isChecked():
@@ -303,7 +309,7 @@ class UploadFile(w.QDialog):
         """
         file_dialog = w.QFileDialog(self)
         file_dialog.setWindowTitle("Open File")
-        file_dialog.setNameFilter("PDF or Images (*.png *.jpg *.jpeg *.pdf)")
+        file_dialog.setNameFilter("CSV (*.png *.jpg *.jpeg *.pdf *.csv)")
         file_dialog.setFileMode(w.QFileDialog.FileMode.ExistingFile)
         file_dialog.setViewMode(w.QFileDialog.ViewMode.Detail)
 
