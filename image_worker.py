@@ -39,12 +39,15 @@ class ImageProcessingWorker(QObject):
         self.path = path
         self.template = template
         self.project_path = project_path
+        self.douteux = {}
 
     def run(self):
         try:
             print(f"[Worker] START run() for {self.path}")
             result = self._process_image(self.path)
             self.processed.emit(result)
+            if result.get("douteux"): 
+                self.needManualReview.emit(result["image"], result["douteux"])
         except Exception as e:
             print("[Worker] CRASH", e)
             traceback.print_exc()
@@ -52,6 +55,7 @@ class ImageProcessingWorker(QObject):
 
 
     def _process_image(self, path: str) -> dict:
+        self.douteux = {}
         # (1) Alignement / préparation
         copy_dir, aligned, base_name, ext = self._prepare_and_align_image(path)
 
@@ -63,10 +67,6 @@ class ImageProcessingWorker(QObject):
 
         # (4) Traitement questions → retourne (centers, filled, douteux)
         centers, filled, douteux = self._process_question_block(qst_path, copy_dir)
-
-        # (5) Si douteux → signal vers l'UI (c'est l'UI qui ouvrira la review)
-        if douteux:
-            self.needManualReview.emit(qst_path, douteux)
 
         # (6) Renommer le dossier selon meta (I/O pur → OK en worker)
         new_dir = self._rename_copy_folder_from_meta(copy_dir)
@@ -234,7 +234,7 @@ class ImageProcessingWorker(QObject):
                     if len(scores) != 4 or len(cts) != 4:
                         print(f"[WARN] Q{question_number} ignorée (groupe incomplet)")
                         continue
-                    result = filter_relative_winner(scores, margin=0.2, question_number=question_number)
+                    result = filter_relative_winner(scores, margin=0.2, question_number=question_number, parent=self)
                     question_to_index[question_number] = len(centers_sorted)
                     filled += result if sum(result) else [False] * 4
                     centers_sorted.extend(cts)
@@ -271,13 +271,22 @@ class ImageProcessingWorker(QObject):
                 print(f"[INFO] Scores mis à jour dans meta.json.")
             else:
                 print(f"[WARN] Fichier toeic_correction.csv introuvable dans le projet.")
-
-            cm.trace_circles(img_questions, centers_sorted, filled, qst_path)
+                
+            
+            douteux_centers = []
+            if hasattr(self, "douteux") and self.douteux:
+                for q in self.douteux:
+                    start_idx = question_to_index.get(q)
+                    if start_idx is not None:
+                        douteux_centers.extend(
+                            [(int(pt[0]), int(pt[1])) for pt in centers_sorted[start_idx:start_idx + 4]]
+                        )
+            cm.trace_circles(img_questions, centers_sorted, filled, qst_path, douteux_centers=douteux_centers)
 
         except Exception as e:
             print(f" Erreur détection cercles (bas) : {e}")
         
-        return centers_sorted, filled, {}
+        return centers_sorted, filled, self.douteux
     
     def _rename_copy_folder_from_meta(self, copy_dir):
         """
