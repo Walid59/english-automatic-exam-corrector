@@ -134,7 +134,7 @@ class ProjectDialog(w.QDialog):
                 dialog.final_filled,
                 image_path,
                 modified_questions=dialog.modified_questions,
-                douteux_centers=[]
+                douteux_centers=douteux_centers
             )
 
             self.copy_data[path] = data
@@ -181,8 +181,6 @@ class ProjectDialog(w.QDialog):
     def open_image(self, item):
         """
         Open an image in a viewer dialog when a list item is double-clicked
-        :param item:
-        :return:
         """
         path = item.data(QtCore.Qt.UserRole)
         print(f"[DEBUG] Tentative d'ouverture : {path}")
@@ -192,6 +190,13 @@ class ProjectDialog(w.QDialog):
             QtWidgets.QMessageBox.warning(self, "Erreur", "Fichier introuvable.")
             return
 
+        try:
+            viewer = ImageViewerDialog(path, self)  # (path, parent)
+            viewer.exec()
+            return
+        except TypeError:
+            pass
+
         pixmap = QtGui.QPixmap(path)
         if pixmap.isNull():
             print("[DEBUG] QPixmap a échoué à charger l'image.")
@@ -200,6 +205,7 @@ class ProjectDialog(w.QDialog):
 
         viewer = ImageViewerDialog(pixmap, basename(path), self)
         viewer.exec()
+
 
     def load_existing_copies(self):
         """
