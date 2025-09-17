@@ -1,8 +1,12 @@
 # fichier constants (constants.py)
+import os
 
 DIR_PATH = "projects"
-FOLDER_ICON = "resources/icons/folder.svg"
-ADD_ICON = "resources/icons/add-button.svg"
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+FOLDER_ICON = os.path.join(BASE_DIR,"resources/icons/folder.svg")
+ADD_ICON = os.path.join(BASE_DIR,"resources/icons/add-button.svg")
 
 ACCENTS = ["ˆ", "°", "`", "´", "”", "~", "¸"]
 LETTERS = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
