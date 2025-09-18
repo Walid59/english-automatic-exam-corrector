@@ -5,8 +5,7 @@ set -e
 
 # Récupère le chemin absolu du script run.sh
 DIR="$(cd "$(dirname "$0")" && pwd)"
-
-source "$DIR/venv/bin/activate"
+cd $DIR
 
 # Lancement du main.py depuis le même dossier
-python3.11 "$DIR/main.py"
+./venv/bin/python main.py
