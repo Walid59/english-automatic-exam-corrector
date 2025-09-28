@@ -23,6 +23,21 @@ TOEIC_STRUCTURE = {
     }
 }
 
+TOEIC_SCORES = None
+
+def get_toeic_table():
+    global TOEIC_SCORES
+    if TOEIC_SCORES is None:
+        try:
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            json_path = os.path.join(script_dir, "toeic_scores.json")
+            with open(json_path, "r", encoding="utf-8") as f:
+                TOEIC_SCORES = json.load(f)
+        except:
+            TOEIC_SCORES = {}
+    return TOEIC_SCORES
+
+
 def compute_detailed_scores(filled, correction_path, choices_per_question=4):
     try:
         with open(correction_path, newline='') as f:
@@ -55,9 +70,9 @@ def compute_detailed_scores(filled, correction_path, choices_per_question=4):
                                 scores["subparts"][sub] += 1
                         break
 
-        # temporaire : juste un produit en croix en attendant la note echelonnee
-        scores["scaled_listening"] = round((scores["listening"] / 100) * 495)
-        scores["scaled_reading"] = round((scores["reading"] / 100) * 495)
+        toeic_table = get_toeic_table()
+        scores["scaled_listening"] = toeic_table.get(str(scores["listening"]), {"listening": 0})["listening"]
+        scores["scaled_reading"] = toeic_table.get(str(scores["reading"]), {"reading": 0})["reading"]
         scores["scaled_total"] = scores["scaled_listening"] + scores["scaled_reading"]
 
         return scores
