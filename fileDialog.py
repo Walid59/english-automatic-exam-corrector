@@ -65,25 +65,25 @@ class UploadFile(w.QDialog):
 
         self.manual_options_group = w.QButtonGroup(self)
         self.radio_manual_toeic = w.QRadioButton("TOEIC")
-        self.radio_manual_custom = w.QRadioButton("Custom correction")
+        # self.radio_manual_custom = w.QRadioButton("Custom correction")
         self.radio_manual_toeic.setChecked(True)
 
-        # Label + ComboBox pour les sous-types de custom
-        self.custom_type_combo = w.QComboBox()
-        self.custom_type_combo.addItems(["TOEIC Writing", "TOEIC Listening", "TOEIC Full Custom"])
-        self.custom_type_combo.setVisible(False)
+        # # Label + ComboBox pour les sous-types de custom
+        # self.custom_type_combo = w.QComboBox()
+        # self.custom_type_combo.addItems(["TOEIC Writing", "TOEIC Listening", "TOEIC Full Custom"])
+        # self.custom_type_combo.setVisible(False)
 
-        # Quand on clique sur "Custom correction", on affiche la ComboBox
-        self.radio_manual_custom.toggled.connect(self.toggle_custom_type_combo)
+        # # Quand on clique sur "Custom correction", on affiche la ComboBox
+        # self.radio_manual_custom.toggled.connect(self.toggle_custom_type_combo)
 
         self.manual_options_group.addButton(self.radio_manual_toeic)
-        self.manual_options_group.addButton(self.radio_manual_custom)
+        # self.manual_options_group.addButton(self.radio_manual_custom)
 
         manual_layout.addWidget(w.QLabel("Exam type (for manual creation):"))
 
         manual_layout.addWidget(self.radio_manual_toeic)
-        manual_layout.addWidget(self.radio_manual_custom)
-        manual_layout.addWidget(self.custom_type_combo)
+        # manual_layout.addWidget(self.radio_manual_custom)
+        # manual_layout.addWidget(self.custom_type_combo)
 
         layout.addWidget(self.manual_options_container)
 
@@ -96,13 +96,13 @@ class UploadFile(w.QDialog):
 
         self.outer_stack.addWidget(self.page_0)
 
-    def toggle_custom_type_combo(self):
-        """
-        toggle visibility of the custom type combobox
-        :return:
-        """
-        show = self.radio_manual_custom.isChecked()
-        self.custom_type_combo.setVisible(show)
+    # def toggle_custom_type_combo(self):
+    #     """
+    #     toggle visibility of the custom type combobox
+    #     :return:
+    #     """
+    #     show = self.radio_manual_custom.isChecked()
+    #     self.custom_type_combo.setVisible(show)
 
     def toggle_manual_options(self):
         """
@@ -172,24 +172,24 @@ class UploadFile(w.QDialog):
         self.exam_widget.setWidget(scroll_content)
         self.exam_widget.setWidgetResizable(True)
 
-        self.custom_stack = w.QStackedWidget()
+        # self.custom_stack = w.QStackedWidget()
 
-        self.custom_widget_full = w.QLabel("Interface for TOEIC Full Custom – to implement")
-        self.custom_widget_full.setAlignment(QtCore.Qt.AlignCenter)
+        # self.custom_widget_full = w.QLabel("Interface for TOEIC Full Custom – to implement")
+        # self.custom_widget_full.setAlignment(QtCore.Qt.AlignCenter)
 
-        self.custom_widget_writing = w.QLabel("Interface for TOEIC Writing – to implement")
-        self.custom_widget_writing.setAlignment(QtCore.Qt.AlignCenter)
+        # self.custom_widget_writing = w.QLabel("Interface for TOEIC Writing – to implement")
+        # self.custom_widget_writing.setAlignment(QtCore.Qt.AlignCenter)
 
-        self.custom_widget_listening = w.QLabel("Interface for TOEIC Listening – to implement")
-        self.custom_widget_listening.setAlignment(QtCore.Qt.AlignCenter)
+        # self.custom_widget_listening = w.QLabel("Interface for TOEIC Listening – to implement")
+        # self.custom_widget_listening.setAlignment(QtCore.Qt.AlignCenter)
 
-        self.custom_stack.addWidget(self.custom_widget_full)
-        self.custom_stack.addWidget(self.custom_widget_writing)
-        self.custom_stack.addWidget(self.custom_widget_listening)
+        # self.custom_stack.addWidget(self.custom_widget_full)
+        # self.custom_stack.addWidget(self.custom_widget_writing)
+        # self.custom_stack.addWidget(self.custom_widget_listening)
 
         self.dynamic_area.addWidget(self.import_widget)
         self.dynamic_area.addWidget(self.exam_widget)
-        self.dynamic_area.addWidget(self.custom_stack)
+        # self.dynamic_area.addWidget(self.custom_stack)
 
         layout.addWidget(self.dynamic_area)
 
@@ -228,20 +228,23 @@ class UploadFile(w.QDialog):
 
         if self.radio_import.isChecked():
             self.dynamic_area.setCurrentWidget(self.import_widget)
-        elif self.radio_manual.isChecked():
-            if self.radio_manual_toeic.isChecked():
-                self.dynamic_area.setCurrentWidget(self.exam_widget)
-            else:
-                # Affichage dynamique selon le choix
-                selected = self.custom_type_combo.currentText()
-                if selected == "TOEIC Full Custom":
-                    self.custom_stack.setCurrentWidget(self.custom_widget_full)
-                elif selected == "TOEIC Writing":
-                    self.custom_stack.setCurrentWidget(self.custom_widget_writing)
-                elif selected == "TOEIC Listening":
-                    self.custom_stack.setCurrentWidget(self.custom_widget_listening)
-                self.dynamic_area.setCurrentWidget(self.custom_stack)
+            self.save_later_button.setVisible(False)
 
+        elif self.radio_manual.isChecked():
+            # if self.radio_manual_toeic.isChecked():
+            #     self.dynamic_area.setCurrentWidget(self.exam_widget)
+            # else:
+            #     # Affichage dynamique selon le choix
+            #     selected = self.custom_type_combo.currentText()
+            #     if selected == "TOEIC Full Custom":
+            #         self.custom_stack.setCurrentWidget(self.custom_widget_full)
+            #     elif selected == "TOEIC Writing":
+            #         self.custom_stack.setCurrentWidget(self.custom_widget_writing)
+            #     elif selected == "TOEIC Listening":
+            #         self.custom_stack.setCurrentWidget(self.custom_widget_listening)
+            #     self.dynamic_area.setCurrentWidget(self.custom_stack)
+            self.dynamic_area.setCurrentWidget(self.exam_widget)
+            self.save_later_button.setVisible(True)
         self.outer_stack.setCurrentIndex(1)
 
     def create_project(self):
@@ -282,18 +285,18 @@ class UploadFile(w.QDialog):
                     with open(join(project_path, "custom_correction.csv"), "w") as f:
                         f.write("Custom correction to be filled.")
 
-            try:
-                temp_file = os.path.join(self.project_dir, "__temp__", "toeic_correction.csv")
-                if os.path.exists(temp_file):
-                    os.remove(temp_file)
+                try:
+                    temp_file = os.path.join(self.project_dir, "__temp__", "toeic_correction.csv")
+                    if os.path.exists(temp_file):
+                        os.remove(temp_file)
 
-                # Supprimer le dossier __temp__ s’il est vide
-                temp_folder = os.path.dirname(temp_file)
-                if os.path.exists(temp_folder) and not os.listdir(temp_folder):
-                    os.rmdir(temp_folder)
+                    # Supprimer le dossier __temp__ s’il est vide
+                    temp_folder = os.path.dirname(temp_file)
+                    if os.path.exists(temp_folder) and not os.listdir(temp_folder):
+                        os.rmdir(temp_folder)
 
-            except Exception as e:
-                print(f"[WARN] Impossible de supprimer le fichier temporaire : {e}")
+                except Exception as e:
+                    print(f"[WARN] Impossible de supprimer le fichier temporaire : {e}")
 
             self.accept()
         except FileExistsError:
