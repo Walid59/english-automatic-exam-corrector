@@ -15,6 +15,12 @@ import traceback
 
 from joblib import load
 
+import threading
+# adding lockers to prevent conflict issue with folders
+folder_creation_lock = threading.Lock()
+folder_rename_lock = threading.Lock()
+
+
 def resource_path(relative_path: str) -> str:
     """Retourne le chemin absolu vers une ressource embarquée
     compatible dev (fichiers à côté du code) et PyInstaller (--onefile or folder)."""
@@ -87,10 +93,12 @@ class ImageProcessingWorker(QObject):
         Align the copy with template and stores aligned image
         """
         project_dir = dirname(path)
-        existing = [f for f in listdir(project_dir) if f.startswith("copy_") and isdir(join(project_dir, f))]
-        index = len(existing) + 1
-        copy_dir = join(project_dir, f"copy_{index}")
-        makedirs(copy_dir, exist_ok=True)
+        
+        with folder_creation_lock:
+            existing = [f for f in listdir(project_dir) if f.startswith("copy_") and isdir(join(project_dir, f))]
+            index = len(existing) + 1
+            copy_dir = join(project_dir, f"copy_{index}")
+            makedirs(copy_dir, exist_ok=True)
 
         base, ext = splitext(path)
         base_name = basename(base)
@@ -315,21 +323,23 @@ class ImageProcessingWorker(QObject):
 
             if new_dir == copy_dir:
                 return
+            
+            with folder_rename_lock:
+                if exists(new_dir):
+                    print(f"[WARN] Le dossier {new_dir} existe déjà, renommage annulé.")
+                    return
 
-            if exists(new_dir):
-                print(f"[WARN] Le dossier {new_dir} existe déjà, renommage annulé.")
-                return
+                try:
+                    rename(copy_dir, new_dir)
+                    print(f"[INFO] Dossier renommé avec succès : {new_dir}")
+                except PermissionError:
+                    print(f"[WARN] os.rename échoué (PermissionError). Tentative de copie...")
 
-            try:
-                rename(copy_dir, new_dir)
-                print(f"[INFO] Dossier renommé avec succès : {new_dir}")
-            except PermissionError:
-                print(f"[WARN] os.rename échoué (PermissionError). Tentative de copie...")
-
-                shutil.copytree(copy_dir, new_dir)
-                shutil.rmtree(copy_dir)
-                print(f"[INFO] Dossier copié puis supprimé : {new_dir}")
+                    shutil.copytree(copy_dir, new_dir)
+                    shutil.rmtree(copy_dir)
+                    print(f"[INFO] Dossier copié puis supprimé : {new_dir}")
 
             return new_dir
+        
         except Exception as e:
             print(f"[ERREUR] Impossible de renommer le dossier : {e}")
