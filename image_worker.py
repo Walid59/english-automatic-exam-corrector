@@ -78,8 +78,10 @@ class ImageProcessingWorker(QObject):
         new_dir = self._rename_copy_folder_from_meta(copy_dir)
         if new_dir:
             copy_dir = new_dir
+            name_path = join(copy_dir, basename(name_path))
+            qst_path = join(copy_dir, basename(qst_path))
 
-        # (7) Renvoyer des **données pures** à l’UI
+        # (7) Renvoyer des **données pures** à lc’UI
         return {
             "copy_dir": copy_dir,       # dossier final (évent. renommé)
             "image": qst_path,          # chemin du bloc questions
