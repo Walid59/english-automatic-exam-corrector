@@ -1,6 +1,7 @@
 # Purpose of the project
 The aim of this project is to create an automatic exam corrector application for TOEIC.
 
+Please note that this project is not affiliated with TOEIC or ETS.
 ___
 ## Structure of the project (UI)
 When the application starts, it is possible for the user to create or open existing projects.  
